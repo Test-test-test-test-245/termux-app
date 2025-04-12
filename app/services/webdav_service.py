@@ -76,9 +76,11 @@ class WebDAVService:
                 "user_mapping": {},  # We'll handle auth in get_domain_controller
             },
             "verbose": 2,
-            "enable_loggers": [],
+            "logging": {
+                "enable_loggers": []  # Updated from deprecated enable_loggers
+            },
             "property_manager": True,  # True: use property_manager.PropertyManager
-            "lock_manager": True,  # True: use lock_manager.LockManager
+            "lock_storage": True,  # Updated from deprecated lock_manager
         }
         
         return WsgiDAVApp(config)
