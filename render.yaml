@@ -5,8 +5,8 @@ services:
     name: termux-web-terminal
     env: python
     buildCommand: pip install -r requirements.txt
-    # Using gevent instead of eventlet due to compatibility issues with Python 3.11
-    startCommand: gunicorn --worker-class gevent -w 1 -b 0.0.0.0:$PORT app:app
+    # Use wsgi.py as entry point to avoid confusion between app directory and app.py
+    startCommand: gunicorn --worker-class gevent -w 1 -b 0.0.0.0:$PORT wsgi:app
     runtime: python
     plan: free
     

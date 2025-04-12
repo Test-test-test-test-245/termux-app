@@ -82,4 +82,5 @@ RUN mkdir -p /app/storage/users
 COPY . .
 
 # Set up entry point - using gevent for Python 3.11 compatibility
-CMD gunicorn --worker-class gevent -w 1 -b 0.0.0.0:$PORT app:app
+# Use wsgi.py to avoid name conflict with app directory
+CMD gunicorn --worker-class gevent -w 1 -b 0.0.0.0:$PORT wsgi:app
