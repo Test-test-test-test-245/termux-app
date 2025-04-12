@@ -1,9 +1,8 @@
 import os
 import logging
 from wsgidav.wsgidav_app import WsgiDAVApp
-from wsgidav.fs_provider import FilesystemProvider  # Updated from fs_dav_provider
-from wsgidav.dav_provider import DAVProvider
-from wsgidav.dav_error import DAVError
+# Revert back to original import
+from wsgidav.fs_dav_provider import FilesystemProvider
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 from flask import Flask, request, Response
@@ -101,75 +100,40 @@ class WebDAVService:
         This provider intercepts requests and routes them to the correct
         user's directory based on authentication.
         """
-        from wsgidav.dav_provider import DAVProvider
-        from wsgidav.fs_provider import FilesystemProvider
-        from wsgidav.dav_error import DAVError
-        from wsgidav.util import join_uri
+        # Instead of creating a custom provider, we'll use a factory function
+        # that creates appropriate FilesystemProvider instances based on the 
+        # authenticated user
         
-        # Create a proper DAV provider by extending DAVProvider
-        class SessionAwareProvider(DAVProvider):
-            def __init__(self, terminal_service):
-                super().__init__()
-                self.terminal_service = terminal_service
-                # Cache of providers for each session
-                self.session_providers = {}
-            
-            def get_resource_inst(self, path, environ):
-                # Extract session_id from authentication
-                auth_user = environ.get("wsgidav.auth.user_name")
-                
-                if not auth_user:
-                    logger.warning("WebDAV access without authentication")
-                    return None
-                
-                # Get or create provider for this session
-                provider = self._get_session_provider(auth_user, environ)
-                if not provider:
-                    return None
-                
-                # Use the session's provider to get the resource
-                return provider.get_resource_inst(path, environ)
-            
-            def _get_session_provider(self, session_id, environ):
-                """Get or create a provider for a session."""
-                # Check if we already have a provider for this session
-                if session_id in self.session_providers:
-                    return self.session_providers[session_id]
-                
-                # Get the session to find user_files directory
-                session = self.terminal_service.get_session(session_id)
-                if not session:
-                    logger.warning(f"WebDAV access for unknown session: {session_id}")
-                    return None
-                
-                # Create a new provider for this session
-                try:
-                    user_files_dir = session.user_files
-                    logger.info(f"Creating WebDAV provider for session {session_id} in {user_files_dir}")
-                    provider = FilesystemProvider(user_files_dir)
-                    # Cache the provider
-                    self.session_providers[session_id] = provider
-                    return provider
-                except Exception as e:
-                    logger.error(f"Error creating provider for session {session_id}: {str(e)}")
-                    return None
-            
-            # Required DAVProvider methods that delegate to the session provider
-            def is_collection(self, path, environ):
-                provider = self._get_provider_for_request(environ)
-                return provider.is_collection(path, environ) if provider else False
-            
-            def is_readonly(self):
-                return False
-            
-            def _get_provider_for_request(self, environ):
-                """Helper to get the appropriate provider for the current request."""
-                auth_user = environ.get("wsgidav.auth.user_name")
-                if not auth_user:
-                    return None
-                return self._get_session_provider(auth_user, environ)
+        terminal_service = self.terminal_service
         
-        return SessionAwareProvider(self.terminal_service)
+        # This is a factory function that will be called by WsgiDAV
+        # It returns a provider for the authenticated user
+        def get_session_provider(environ):
+            # Extract session_id from authentication
+            auth_user = environ.get("wsgidav.auth.user_name")
+            
+            if not auth_user:
+                logger.warning("WebDAV access without authentication")
+                return None
+            
+            # Get the session to find user_files directory
+            session = terminal_service.get_session(auth_user)
+            if not session:
+                logger.warning(f"WebDAV access for unknown session: {auth_user}")
+                return None
+            
+            try:
+                user_files_dir = session.user_files
+                logger.info(f"Creating WebDAV provider for session {auth_user} in {user_files_dir}")
+                # Create a standard FilesystemProvider for this user's directory
+                return FilesystemProvider(user_files_dir)
+            except Exception as e:
+                logger.error(f"Error creating provider for session {auth_user}: {str(e)}")
+                return None
+        
+        # Just return the factory function as the provider
+        # WsgiDAV will use this to get the appropriate provider
+        return get_session_provider
     
     # Domain controller methods for authentication
     
