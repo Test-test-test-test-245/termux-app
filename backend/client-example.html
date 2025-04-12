@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Termux Web Terminal Client</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            margin: 0;
+            padding: 0;
+            background-color: #121212;
+            color: #f0f0f0;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+        .terminal {
+            flex: 1;
+            background-color: #000;
+            border-radius: 5px;
+            padding: 10px;
+            overflow: auto;
+            white-space: pre-wrap;
+            font-size: 14px;
+            line-height: 1.2;
+            margin-bottom: 10px;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        button {
+            background-color: #4c4c4c;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #666;
+        }
+        input[type="text"] {
+            flex: 1;
+            padding: 8px;
+            background-color: #333;
+            color: #f0f0f0;
+            border: 1px solid #555;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+        }
+        .session-info {
+            background-color: #333;
+            border-radius: 5px;
+            padding: 10px;
+            margin-bottom: 10px;
+            font-size: 12px;
+            overflow: auto;
+        }
+        .session-info pre {
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="controls">
+            <button id="createSession">Create Session</button>
+            <button id="listSessions">List Sessions</button>
+            <button id="clearTerminal">Clear Output</button>
+            <button id="terminateSession">Terminate Session</button>
+        </div>
+        
+        <div class="session-info">
+            <pre id="sessionData">No active session</pre>
+        </div>
+        
+        <div class="terminal" id="terminal"></div>
+        
+        <div class="controls">
+            <input type="text" id="commandInput" placeholder="Enter command..." disabled>
+            <button id="sendCommand" disabled>Send</button>
+        </div>
+    </div>
+
+    <!-- Include Socket.IO client library -->
+    <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const terminal = document.getElementById('terminal');
+            const sessionData = document.getElementById('sessionData');
+            const commandInput = document.getElementById('commandInput');
+            const sendCommandBtn = document.getElementById('sendCommand');
+            const createSessionBtn = document.getElementById('createSession');
+            const listSessionsBtn = document.getElementById('listSessions');
+            const clearTerminalBtn = document.getElementById('clearTerminal');
+            const terminateSessionBtn = document.getElementById('terminateSession');
+            
+            // Use relative URL in development, or absolute URL in production
+            const serverUrl = window.location.hostname === 'localhost' ? 
+                              'http://localhost:5000' : 
+                              window.location.origin;
+            
+            // Connect to WebSocket server
+            const socket = io(serverUrl);
+            
+            let currentSessionId = null;
+            
+            // Socket.IO event handlers
+            socket.on('connect', () => {
+                appendToTerminal('Connected to server\n');
+            });
+            
+            socket.on('disconnect', () => {
+                appendToTerminal('Disconnected from server\n');
+                disableTerminalInput();
+                currentSessionId = null;
+                updateSessionData('No active session');
+            });
+            
+            socket.on('output', (data) => {
+                if (data.session_id === currentSessionId) {
+                    appendToTerminal(data.data);
+                }
+            });
+            
+            socket.on('joined', (data) => {
+                appendToTerminal(`Joined session ${data.session_id}\n`);
+                currentSessionId = data.session_id;
+                enableTerminalInput();
+                updateSessionData(JSON.stringify(data.session, null, 2));
+            });
+            
+            socket.on('left', (data) => {
+                appendToTerminal(`Left session ${data.session_id}\n`);
+                if (data.session_id === currentSessionId) {
+                    currentSessionId = null;
+                    disableTerminalInput();
+                    updateSessionData('No active session');
+                }
+            });
+            
+            socket.on('terminated', (data) => {
+                appendToTerminal(`Session ${data.session_id} terminated\n`);
+                if (data.session_id === currentSessionId) {
+                    currentSessionId = null;
+                    disableTerminalInput();
+                    updateSessionData('No active session');
+                }
+            });
+            
+            socket.on('error', (data) => {
+                appendToTerminal(`Error: ${data.message}\n`);
+            });
+            
+            // Button event handlers
+            createSessionBtn.addEventListener('click', createSession);
+            listSessionsBtn.addEventListener('click', listSessions);
+            clearTerminalBtn.addEventListener('click', clearTerminal);
+            terminateSessionBtn.addEventListener('click', terminateSession);
+            
+            sendCommandBtn.addEventListener('click', sendCommand);
+            commandInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    sendCommand();
+                }
+            });
+            
+            // Functions
+            function createSession() {
+                if (currentSessionId) {
+                    // Leave current session first
+                    socket.emit('leave', { session_id: currentSessionId });
+                }
+                
+                fetch(`${serverUrl}/api/terminal/sessions`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        shell: '/bin/bash',
+                        cols: 80,
+                        rows: 24,
+                        env: { TERM: 'xterm-256color' }
+                    }),
+                })
+                .then(response => response.json())
+                .then(data => {
+                    appendToTerminal(`Created session ${data.id}\n`);
+                    joinSession(data.id);
+                })
+                .catch(error => {
+                    appendToTerminal(`Error creating session: ${error.message}\n`);
+                });
+            }
+            
+            function listSessions() {
+                fetch(`${serverUrl}/api/terminal/sessions`)
+                .then(response => response.json())
+                .then(data => {
+                    const sessionsList = data.sessions.map(s => 
+                        `ID: ${s.id}, Shell: ${s.shell}, Active: ${s.active}`
+                    ).join('\n');
+                    
+                    appendToTerminal(`Available sessions:\n${sessionsList || 'No active sessions'}\n`);
+                })
+                .catch(error => {
+                    appendToTerminal(`Error listing sessions: ${error.message}\n`);
+                });
+            }
+            
+            function joinSession(sessionId) {
+                socket.emit('join', { session_id: sessionId });
+            }
+            
+            function terminateSession() {
+                if (!currentSessionId) {
+                    appendToTerminal('No active session to terminate\n');
+                    return;
+                }
+                
+                fetch(`${serverUrl}/api/terminal/sessions/${currentSessionId}`, {
+                    method: 'DELETE',
+                })
+                .then(() => {
+                    appendToTerminal(`Terminated session ${currentSessionId}\n`);
+                    currentSessionId = null;
+                    disableTerminalInput();
+                    updateSessionData('No active session');
+                })
+                .catch(error => {
+                    appendToTerminal(`Error terminating session: ${error.message}\n`);
+                });
+            }
+            
+            function sendCommand() {
+                if (!currentSessionId) return;
+                
+                const command = commandInput.value;
+                if (!command) return;
+                
+                socket.emit('input', {
+                    session_id: currentSessionId,
+                    data: command + '\n'
+                });
+                
+                commandInput.value = '';
+            }
+            
+            function appendToTerminal(text) {
+                terminal.textContent += text;
+                terminal.scrollTop = terminal.scrollHeight;
+            }
+            
+            function clearTerminal() {
+                terminal.textContent = '';
+            }
+            
+            function enableTerminalInput() {
+                commandInput.disabled = false;
+                sendCommandBtn.disabled = false;
+                commandInput.focus();
+            }
+            
+            function disableTerminalInput() {
+                commandInput.disabled = true;
+                sendCommandBtn.disabled = true;
+            }
+            
+            function updateSessionData(data) {
+                sessionData.textContent = data;
+            }
+        });
+    </script>
+</body>
+</html>
