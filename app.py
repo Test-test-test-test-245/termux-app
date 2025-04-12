@@ -1,9 +1,25 @@
 #!/usr/bin/env python3
 
 import os
-import eventlet
-# Use eventlet for better WebSocket performance with Flask-SocketIO
-eventlet.monkey_patch()
+import sys
+
+# Try to use eventlet, fall back to gevent if issues occur
+async_mode = 'eventlet'
+try:
+    import eventlet
+    # Use eventlet for better WebSocket performance with Flask-SocketIO
+    eventlet.monkey_patch()
+except ImportError:
+    try:
+        import gevent
+        import gevent.monkey
+        gevent.monkey.patch_all()
+        async_mode = 'gevent'
+    except ImportError:
+        print("Neither eventlet nor gevent is available. Using threading mode.")
+        async_mode = 'threading'
+
+print(f"Using {async_mode} for async mode")
 
 from flask import Flask, jsonify
 from flask_socketio import SocketIO
@@ -18,7 +34,7 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev_key_for_websocket_secure
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max upload size
 
 # Initialize SocketIO with CORS allowed for the iOS app
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode=async_mode)
 
 # Import and register API routes
 from app.api.terminal_api import terminal_api

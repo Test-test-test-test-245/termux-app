@@ -5,9 +5,12 @@ services:
     name: termux-web-terminal
     env: python
     buildCommand: pip install -r requirements.txt
+    # Using eventlet 0.30.2 which is compatible with gunicorn's eventlet worker
     startCommand: gunicorn --worker-class eventlet -w 1 -b 0.0.0.0:$PORT app:app
+    # Alternative command using gevent if eventlet causes issues:
+    # startCommand: gunicorn --worker-class gevent -w 1 -b 0.0.0.0:$PORT app:app
     runtime: python
-    plan:  free
+    plan: free
     
     # Environment variables
     envVars:
@@ -19,3 +22,9 @@ services:
         value: 3600  # 1 hour timeout for inactive sessions
       - key: HOME_DIR
         value: /var/data/storage/home
+    
+    # Persistent disk storage for user files (optional - uncomment if needed)
+    # disk:
+    #   name: data
+    #   mountPath: /var/data/storage
+    #   sizeGB: 1  # 1GB storage for free tier
