@@ -18,14 +18,3 @@ services:
         value: 3600  # 1 hour timeout for inactive sessions
       - key: HOME_DIR
         value: /var/data/storage/home
-    
-    # Health check to ensure service is running
-    healthCheckPath: /
-    
-    # Persistent disk storage for user files and sessions
-     # 1GB storage (increase as needed)
-
-# Maintenance task to clean up orphaned sessions
-  - name: cleanup-sessions
-    schedule: "0 */6 * * *"  # Every 6 hours
-    command: "curl -X POST $RENDER_EXTERNAL_URL/api/maintenance/cleanup"
