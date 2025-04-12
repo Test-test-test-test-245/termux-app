@@ -23,13 +23,9 @@ services:
     healthCheckPath: /
     
     # Persistent disk storage for user files and sessions
-    disk:
-      name: storage
-      mountPath: /var/data/storage
-      sizeGB: 1  # 1GB storage (increase as needed)
+     # 1GB storage (increase as needed)
 
 # Maintenance task to clean up orphaned sessions
-cron:
   - name: cleanup-sessions
     schedule: "0 */6 * * *"  # Every 6 hours
     command: "curl -X POST $RENDER_EXTERNAL_URL/api/maintenance/cleanup"
