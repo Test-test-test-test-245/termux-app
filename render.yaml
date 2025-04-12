@@ -18,11 +18,11 @@ services:
         generateValue: true  # Automatically generates a secure random key
       - key: INACTIVE_TIMEOUT
         value: 3600  # 1 hour timeout for inactive sessions
-      - key: HOME_DIR
-        value: /var/data/storage/home
+      - key: STORAGE_DIR  # Path for user storage directory
+        value: /var/data/storage/users
     
-    # Persistent disk storage for user files (optional - uncomment if needed)
-    # disk:
-    #   name: data
-    #   mountPath: /var/data/storage
-    #   sizeGB: 1  # 1GB storage for free tier
+    # Persistent disk storage for user files
+    disk:
+      name: data
+      mountPath: /var/data/storage
+      sizeGB: 1  # 1GB storage for free tier

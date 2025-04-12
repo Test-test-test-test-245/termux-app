@@ -36,11 +36,14 @@ class TerminalSession:
         self.last_activity = time.time()
         self.buffer_size = buffer_size
         
+        # Get storage directory from environment or use default
+        storage_base = os.environ.get('STORAGE_DIR', './storage/users')
+        
         # Create user-specific directories for isolated storage
-        self.user_dir = f"/app/storage/users/{self.id}"
-        self.user_home = f"{self.user_dir}/home"
-        self.user_files = f"{self.user_dir}/files"
-        self.user_venv = f"{self.user_dir}/venv"
+        self.user_dir = os.path.join(storage_base, self.id)
+        self.user_home = os.path.join(self.user_dir, 'home')
+        self.user_files = os.path.join(self.user_dir, 'files')
+        self.user_venv = os.path.join(self.user_dir, 'venv')
         
         # Create these directories
         os.makedirs(self.user_home, exist_ok=True)

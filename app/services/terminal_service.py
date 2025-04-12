@@ -33,9 +33,13 @@ class TerminalService:
         self.session_lock = threading.Lock()
         self.inactive_timeout = inactive_timeout
         
+        # Get storage directory from environment or use default
+        storage_dir = os.environ.get('STORAGE_DIR', './storage/users')
+        
         # Create base directory for user sessions
-        self.users_base_dir = "/app/storage/users"
+        self.users_base_dir = storage_dir
         os.makedirs(self.users_base_dir, exist_ok=True)
+        logger.info(f"Using storage directory: {self.users_base_dir}")
         
         # Start background cleanup thread
         self.cleanup_thread = threading.Thread(target=self._cleanup_inactive_sessions)
