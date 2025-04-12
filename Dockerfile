@@ -1,4 +1,4 @@
-FROM python:3.9-slim
+FROM python:3.11-slim
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -81,5 +81,5 @@ RUN mkdir -p /app/storage/users
 # Copy application code
 COPY . .
 
-# Set up entry point
-CMD gunicorn --worker-class eventlet -w 1 -b 0.0.0.0:$PORT app:app
+# Set up entry point - using gevent for Python 3.11 compatibility
+CMD gunicorn --worker-class gevent -w 1 -b 0.0.0.0:$PORT app:app
