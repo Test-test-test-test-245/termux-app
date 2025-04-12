@@ -19,6 +19,10 @@ gevent==22.10.2
 # eventlet has issues with Python 3.11, keeping it as a fallback only
 eventlet==0.30.2
 
+# WebDAV support
+wsgidav==4.2.0
+cheroot==9.0.0
+
 # Terminal emulation
 ptyprocess==0.7.0
 pyte==0.8.1

@@ -42,15 +42,24 @@ from app.api.terminal_api import terminal_api
 from app.api.files_api import files_api
 from app.api.python_api import python_api
 from app.api.maintenance_api import maintenance_api
+from app.api.webdav_api import webdav_api
 
 app.register_blueprint(terminal_api)
 app.register_blueprint(files_api)
 app.register_blueprint(python_api)
 app.register_blueprint(maintenance_api)
+app.register_blueprint(webdav_api)
 
 # Import and register WebSocket handlers
 from app.api.terminal_ws import register_socket_events
 register_socket_events(socketio)
+
+# Import and mount WebDAV
+from app.api.webdav_api import get_webdav_service
+from app.services.webdav_service import mount_webdav_to_flask_app
+
+# Mount WebDAV at /webdav endpoint
+mount_webdav_to_flask_app(app, get_webdav_service())
 
 # Create a root endpoint that shows API status and version
 @app.route('/')

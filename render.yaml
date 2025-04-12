@@ -20,6 +20,14 @@ services:
         value: 3600  # 1 hour timeout for inactive sessions
       - key: STORAGE_DIR  # Path for user storage directory
         value: /var/data/storage/users
+      - key: WEBDAV_PORT
+        value: 8080  # Port for WebDAV server (internally)
+      - key: WEBDAV_BASE_URL
+        fromService:
+          name: termux-web-terminal
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+        sync: false  # Don't require the value at build time
     
     # Persistent disk storage for user files
     disk:
