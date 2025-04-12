@@ -1,0 +1,35 @@
+# Render.com deployment configuration
+services:
+  # A Flask web service with WebSocket support
+  - type: web
+    name: termux-web-terminal
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --worker-class eventlet -w 1 -b 0.0.0.0:$PORT app:app
+    runtime: python3.9
+    
+    # Environment variables
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: SECRET_KEY
+        generateValue: true  # Automatically generates a secure random key
+      - key: INACTIVE_TIMEOUT
+        value: 3600  # 1 hour timeout for inactive sessions
+      - key: HOME_DIR
+        value: /var/data/storage/home
+    
+    # Health check to ensure service is running
+    healthCheckPath: /
+    
+    # Persistent disk storage for user files and sessions
+    disk:
+      name: storage
+      mountPath: /var/data/storage
+      sizeGB: 1  # 1GB storage (increase as needed)
+
+# Maintenance task to clean up orphaned sessions
+cron:
+  - name: cleanup-sessions
+    schedule: "0 */6 * * *"  # Every 6 hours
+    command: "curl -X POST $RENDER_EXTERNAL_URL/api/maintenance/cleanup"
