@@ -1,8 +1,10 @@
-from flask import Blueprint, request, jsonify, send_file, safe_join
+from flask import Blueprint, request, jsonify, send_file
 import os
 import shutil
 import mimetypes
 from werkzeug.utils import secure_filename
+# In Flask 2.2.3+, safe_join was moved from flask to werkzeug.security
+from werkzeug.security import safe_join
 
 files_api = Blueprint('files_api', __name__, url_prefix='/api/files')
 
