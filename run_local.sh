@@ -21,4 +21,4 @@ mkdir -p storage/users
 
 # Run the application
 echo "Starting Flask application..."
-python app.py
+python flask_app.py
