@@ -590,19 +590,3 @@ class ProcessUtility {
         }
     }
 }
-
-// Debug utility placeholder (replace with your actual implementation)
-class Debug {
-    static let shared = Debug()
-    
-    enum LogType {
-        case debug
-        case info
-        case warning
-        case error
-    }
-    
-    func log(message: String, type: LogType = .debug) {
-        print("[\(type)] \(message)")
-    }
-}
