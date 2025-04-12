@@ -3,23 +3,24 @@
 import os
 import sys
 
-# Try to use eventlet, fall back to gevent if issues occur
-async_mode = 'eventlet'
+# Try to use gevent first (more compatible with Python 3.11 on Render),
+# fall back to other options if not available
+async_mode = 'gevent'
 try:
-    import eventlet
-    # Use eventlet for better WebSocket performance with Flask-SocketIO
-    eventlet.monkey_patch()
+    import gevent
+    import gevent.monkey
+    gevent.monkey.patch_all()
+    print("Using gevent for async mode")
 except ImportError:
     try:
-        import gevent
-        import gevent.monkey
-        gevent.monkey.patch_all()
-        async_mode = 'gevent'
+        import eventlet
+        # Use eventlet as fallback (may have issues on Python 3.11)
+        eventlet.monkey_patch()
+        async_mode = 'eventlet'
+        print("Using eventlet for async mode")
     except ImportError:
-        print("Neither eventlet nor gevent is available. Using threading mode.")
+        print("Neither gevent nor eventlet is available. Using threading mode.")
         async_mode = 'threading'
-
-print(f"Using {async_mode} for async mode")
 
 from flask import Flask, jsonify
 from flask_socketio import SocketIO
