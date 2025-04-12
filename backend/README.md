@@ -10,6 +10,9 @@ This is a Flask-based backend implementation that provides terminal functionalit
 - Full terminal emulation using PTY (Pseudo Terminal) and terminal emulator
 - Session resize capability to match client display
 - RESTful API for terminal session management
+- File management API for working with files
+- In-terminal editing with multiple editors (vim, nano, emacs, joe)
+- Python development capabilities with pip package management
 - Automatic cleanup of inactive sessions
 
 ## Architecture
@@ -20,7 +23,7 @@ The system is designed with the following components:
 
 1. **Terminal Session Model** - Represents a terminal session with a PTY process and terminal emulator
 2. **Terminal Service** - Manages terminal sessions and handles input/output routing
-3. **Web API** - REST endpoints for terminal session management
+3. **Web API** - REST endpoints for terminal session and file management
 4. **WebSocket API** - Real-time communication for terminal input/output
 
 ### Technology Stack
@@ -30,6 +33,49 @@ The system is designed with the following components:
 - **Eventlet** - Async WSGI server
 - **PTYProcess** - Pseudo-terminal management
 - **Pyte** - Terminal emulator
+- **Terminal Editors** - vim, nano, emacs, joe for in-terminal file editing
+
+## Python Development Features
+
+### Terminal-Based File Editing
+
+The backend includes multiple terminal-based editors that can be used directly within the terminal interface:
+
+- **nano** - Simple, user-friendly editor (default)
+- **vim** - Advanced text editor with syntax highlighting
+- **emacs** - Powerful, extensible text editor
+- **joe** - Simple editor with intuitive keybindings
+
+To edit a file, simply use one of these editors in the terminal:
+
+```bash
+# Create or edit a Python script with nano (easiest for beginners)
+nano my_script.py
+
+# Or use vim for more advanced editing
+vim my_script.py
+
+# Or use emacs
+emacs my_script.py
+```
+
+### Python Package Management
+
+Users can install Python packages directly from the terminal using pip:
+
+```bash
+# Install a package
+pip install numpy
+
+# Upgrade a package
+pip install --upgrade pandas
+
+# Install specific version
+pip install requests==2.25.1
+
+# List installed packages
+pip list
+```
 
 ## Setup and Installation
 
@@ -52,47 +98,42 @@ The following environment variables can be configured:
 - `PORT` - Port to run the server on (default: 5000)
 - `SECRET_KEY` - Secret key for Flask session security
 - `INACTIVE_TIMEOUT` - Seconds after which inactive terminal sessions are cleaned up (default: 3600)
+- `HOME_DIR` - Directory for user home files (default: /app/storage/home)
 
 ## API Documentation
 
 ### RESTful API Endpoints
 
-#### List Sessions
-- **GET** `/api/terminal/sessions`
-- Returns a list of all active terminal sessions
+#### Terminal API
 
-#### Create Session
-- **POST** `/api/terminal/sessions`
-- Create a new terminal session
-- Request Body:
-  ```json
-  {
-    "shell": "/bin/bash",
-    "cwd": "/home/user",
-    "env": {"TERM": "xterm-256color"},
-    "cols": 80,
-    "rows": 24
-  }
-  ```
+- **GET** `/api/terminal/sessions` - List all active terminal sessions
+- **POST** `/api/terminal/sessions` - Create a new terminal session
+- **GET** `/api/terminal/sessions/{session_id}` - Get session details
+- **POST** `/api/terminal/sessions/{session_id}/size` - Resize a session
+- **DELETE** `/api/terminal/sessions/{session_id}` - Terminate a session
 
-#### Get Session
-- **GET** `/api/terminal/sessions/{session_id}`
-- Get information about a specific terminal session
+#### File Management API
 
-#### Resize Session
-- **POST** `/api/terminal/sessions/{session_id}/size`
-- Resize a terminal session
-- Request Body:
-  ```json
-  {
-    "cols": 100,
-    "rows": 30
-  }
-  ```
+- **GET** `/api/files` - List files in a directory
+- **POST** `/api/files` - Create a file or directory
+- **PUT** `/api/files` - Update a file's content
+- **DELETE** `/api/files` - Delete a file or directory
+- **GET** `/api/files/read` - Read file content
+- **GET** `/api/files/download` - Download a file
+- **POST** `/api/files/upload` - Upload a file
+- **POST** `/api/files/rename` - Rename a file or directory
 
-#### Terminate Session
-- **DELETE** `/api/terminal/sessions/{session_id}`
-- Terminate a terminal session
+#### Python Package API
+
+- **GET** `/api/python/packages` - List installed packages
+- **POST** `/api/python/packages` - Install a package
+- **DELETE** `/api/python/packages` - Uninstall a package
+- **GET** `/api/python/packages/search` - Search for packages
+- **GET** `/api/python/packages/info` - Get package info
+- **GET** `/api/python/venvs` - List virtual environments
+- **POST** `/api/python/venvs` - Create a virtual environment
+- **DELETE** `/api/python/venvs` - Delete a virtual environment
+- **POST** `/api/python/run` - Run Python code
 
 ### WebSocket Events
 
@@ -100,38 +141,10 @@ The following environment variables can be configured:
 
 - **connect** - Connect to the WebSocket server
 - **join** - Join a terminal session
-  ```json
-  {
-    "session_id": "2b948e4a-32a5-4245-a890-6aa46ef59a4d"
-  }
-  ```
 - **leave** - Leave a terminal session
-  ```json
-  {
-    "session_id": "2b948e4a-32a5-4245-a890-6aa46ef59a4d"
-  }
-  ```
 - **input** - Send input to a terminal session
-  ```json
-  {
-    "session_id": "2b948e4a-32a5-4245-a890-6aa46ef59a4d",
-    "data": "ls -la\n"
-  }
-  ```
 - **resize** - Resize a terminal session
-  ```json
-  {
-    "session_id": "2b948e4a-32a5-4245-a890-6aa46ef59a4d",
-    "cols": 100,
-    "rows": 30
-  }
-  ```
 - **terminate** - Terminate a terminal session
-  ```json
-  {
-    "session_id": "2b948e4a-32a5-4245-a890-6aa46ef59a4d"
-  }
-  ```
 
 #### Server → Client Events
 
@@ -139,32 +152,17 @@ The following environment variables can be configured:
 - **joined** - Successfully joined a terminal session
 - **left** - Successfully left a terminal session
 - **output** - Terminal output received
-  ```json
-  {
-    "session_id": "2b948e4a-32a5-4245-a890-6aa46ef59a4d",
-    "data": "user@host:~$ "
-  }
-  ```
 - **resized** - Terminal session resized
 - **terminated** - Terminal session terminated
 - **error** - Error occurred
 
 ## Deployment to Render.com
 
-To deploy this application to Render.com:
-
-1. Create a new Web Service on Render
-2. Connect your GitHub repository
-3. Use the following settings:
-   - **Environment**: Python 3
-   - **Build Command**: `pip install -r requirements.txt`
-   - **Start Command**: `gunicorn --worker-class eventlet -w 1 -b 0.0.0.0:$PORT app:app`
-4. Add any necessary environment variables
-5. Deploy the application
+See [DEPLOY_TO_RENDER.md](./DEPLOY_TO_RENDER.md) for detailed instructions on deploying to Render.com.
 
 ## iOS App Integration
 
-To integrate with an iOS app:
+To integrate with your iOS app:
 
 1. Use a WebSocket client library like Starscream or Socket.IO-Client-Swift
 2. Connect to the server WebSocket endpoint

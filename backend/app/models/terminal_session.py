@@ -28,13 +28,33 @@ class TerminalSession:
         self.id = str(uuid.uuid4())
         self.shell = shell
         self.cwd = cwd
-        self.env = env
         self.cols = cols
         self.rows = rows
         self.created_at = time.time()
         self.last_activity = time.time()
         self.buffer_size = buffer_size
         
+        # Configure environment properly for full terminal experience
+        self.env = env.copy() if env else os.environ.copy()
+        
+        # Set HOME to the persistent storage location for user files
+        home_dir = os.environ.get('HOME_DIR', '/app/storage/home')
+        self.env['HOME'] = home_dir
+        
+        # Ensure proper terminal settings
+        if 'TERM' not in self.env:
+            self.env['TERM'] = 'xterm-256color'
+        
+        # Configure editor environment variables
+        self.env['EDITOR'] = 'nano'  # Default editor
+        self.env['VISUAL'] = 'nano'  # Default visual editor
+        
+        # Ensure proper PATH environment
+        if 'PATH' not in self.env:
+            self.env['PATH'] = '/usr/local/bin:/usr/bin:/bin'
+        if '/app/storage/user_files' not in self.env['PATH']:
+            self.env['PATH'] = f"{self.env['PATH']}:/app/storage/user_files"
+            
         # Create output buffer with deque for efficient append and trim operations
         self.output_buffer = deque(maxlen=buffer_size)
         
@@ -43,11 +63,14 @@ class TerminalSession:
         self.stream = pyte.Stream()
         self.stream.attach(self.screen)
         
+        # Create a custom shell RC file if it doesn't exist
+        self._ensure_shell_rc_exists(home_dir)
+        
         # Start the PTY process
         self.pty = ptyprocess.PtyProcess.spawn(
             argv=[shell],
             cwd=cwd,
-            env=env
+            env=self.env
         )
         
         # Flag to indicate if the session is active
@@ -60,6 +83,58 @@ class TerminalSession:
         
         # List of callbacks to call when output is received
         self.output_callbacks = []
+    
+    def _ensure_shell_rc_exists(self, home_dir):
+        """Ensure shell RC file exists with proper configuration for editors"""
+        os.makedirs(home_dir, exist_ok=True)
+        
+        # Create a basic .bashrc if it doesn't exist
+        bashrc_path = os.path.join(home_dir, '.bashrc')
+        if not os.path.exists(bashrc_path):
+            with open(bashrc_path, 'w') as f:
+                f.write('''
+# Terminal configuration for Termux Web
+export PS1="\\[\\033[01;32m\\]\\u@termux-web\\[\\033[00m\\]:\\[\\033[01;34m\\]\\w\\[\\033[00m\\]\\$ "
+
+# Editor configurations
+export EDITOR=nano
+export VISUAL=nano
+
+# Aliases
+alias ll="ls -la"
+alias python=python3
+
+# Path configuration
+export PATH=$PATH:/app/storage/user_files
+
+# Welcome message
+echo "Welcome to Termux Web Terminal!"
+echo "Use 'nano filename.py' to create or edit Python files."
+echo "Type 'pip install packagename' to install Python packages."
+''')
+            os.chmod(bashrc_path, 0o755)
+        
+        # Create empty .bash_history
+        history_path = os.path.join(home_dir, '.bash_history')
+        if not os.path.exists(history_path):
+            open(history_path, 'w').close()
+            os.chmod(history_path, 0o644)
+            
+        # Add .vimrc with basic configuration
+        vimrc_path = os.path.join(home_dir, '.vimrc')
+        if not os.path.exists(vimrc_path):
+            with open(vimrc_path, 'w') as f:
+                f.write('''
+syntax on
+set autoindent
+set expandtab
+set number
+set tabstop=4
+set shiftwidth=4
+set softtabstop=4
+set background=dark
+colorscheme default
+''')
     
     def _read_pty_output(self):
         """
