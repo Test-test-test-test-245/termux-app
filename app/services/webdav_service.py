@@ -10,7 +10,6 @@ try:
     # Try newer module structure
     from wsgidav.dav_provider import DAVProvider
     from wsgidav.dav_error import DAVError
-    from wsgidav.dc.simple_dc import SimpleDomainController
 except ImportError:
     # Fall back to older module structure
     logger = logging.getLogger(__name__)
@@ -18,7 +17,6 @@ except ImportError:
     # In older versions, these may be directly in wsgidav module
     from wsgidav import DAVProvider
     from wsgidav import DAVError
-    from wsgidav.domaincontroller import BaseDomainController as SimpleDomainController
 
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
@@ -27,12 +25,12 @@ from flask import Flask, request, Response
 # Configure logging
 logger = logging.getLogger(__name__)
 
-# Create a custom domain controller that inherits from the proper WsgiDAV base class
-class TermuxDomainController(SimpleDomainController):
+# Create a completely custom domain controller without inheritance
+# This avoids the circular dependency with wsgidav_app
+class TermuxDomainController:
     """Custom domain controller for WebDAV authentication."""
     
     def __init__(self, webdav_service):
-        super().__init__()
         self.webdav_service = webdav_service
     
     def get_domain_realm(self, path_info, environ):
@@ -59,6 +57,14 @@ class TermuxDomainController(SimpleDomainController):
         
         # Check password using werkzeug's secure password checking
         return check_password_hash(self.webdav_service.credentials[user_name]["password_hash"], password)
+        
+    # Additional methods required by the WsgiDAV interface
+    def basic_auth_user(self, realm, user_name, password, environ):
+        """
+        Check basic authentication for user_name, password, and realm.
+        (This method is for HTTP basic authentication, which is what we use)
+        """
+        return self.auth_domain_user(realm, user_name, password, environ)
 
 class WebDAVService:
     """
