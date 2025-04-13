@@ -41,7 +41,7 @@ class TermuxDomainController(BaseDomainController):
     """Custom domain controller for WebDAV authentication."""
     
     def __init__(self, wsgidav_app, config):
-        super().__init__()
+        super().__init__(wsgidav_app, config)
         # We can't pass the webdav_service directly due to circular deps,
         # so we access it through the global variable
         global _webdav_service_instance
