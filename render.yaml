@@ -1,0 +1,36 @@
+# Render.com deployment configuration
+services:
+  # A Flask web service with WebSocket support
+  - type: web
+    name: termux-web-terminal
+    env: python
+    buildCommand: pip install -r requirements.txt
+    # Use wsgi.py as entry point to avoid confusion between app directory and app.py
+    startCommand: gunicorn --worker-class gevent -w 1 -b 0.0.0.0:$PORT wsgi:app
+    runtime: python
+    plan: free
+    
+    # Environment variables
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: SECRET_KEY
+        generateValue: true  # Automatically generates a secure random key
+      - key: INACTIVE_TIMEOUT
+        value: 3600  # 1 hour timeout for inactive sessions
+      - key: STORAGE_DIR  # Path for user storage directory
+        value: /var/data/storage/users
+      - key: WEBDAV_PORT
+        value: 8080  # Port for WebDAV server (internally)
+      - key: WEBDAV_BASE_URL
+        fromService:
+          name: termux-web-terminal
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+        sync: false  # Don't require the value at build time
+    
+    # Persistent disk storage for user files
+    disk:
+      name: data
+      mountPath: /var/data/storage
+      sizeGB: 1  # 1GB storage for free tier

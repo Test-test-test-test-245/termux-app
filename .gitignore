@@ -1,39 +1,42 @@
-# From https://gist.github.com/iainconnor/8605514
-# with the addition of the /captures below.
-/captures
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
 
-# Built application files
-build/
-release/
-*.apk
-*.so
-.externalNativeBuild
-.cxx
-*.zip
+# Virtual environment
+venv/
+.env
+.venv/
+env/
+ENV/
 
-# Local configuration file (sdk path, etc)
-local.properties
-
-# Gradle generated files
-.gradle/
-
-# Signing files
-.signing/
-
-# Intellij
+# IDE files
 .idea/
-*.iml
-
-# Vim
-*.swo
+.vscode/
 *.swp
+*.swo
 
-# OS-specific files
+# Logs
+logs/
+*.log
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Temporary files
+*.bak
+*.tmp
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-.swp
-ehthumbs.db
-Thumbs.db
+
+# Storage files that should be persisted but not versioned
+/storage/
+
+# Render specific
+.render/

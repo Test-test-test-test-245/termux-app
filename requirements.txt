@@ -1,0 +1,28 @@
+# Flask and dependencies with specific versions for Python 3.11 compatibility
+flask==2.2.3
+werkzeug==2.2.3
+jinja2==3.1.2
+itsdangerous==2.1.2
+click==8.1.3
+
+# Socket.IO for WebSockets
+flask-socketio==5.3.3
+python-engineio==4.4.1
+python-socketio==5.8.0
+
+# Environment variables
+python-dotenv==1.0.0
+
+# WSGI server and workers
+gunicorn==20.1.0
+gevent==22.10.2
+# eventlet has issues with Python 3.11, keeping it as a fallback only
+eventlet==0.30.2
+
+# WebDAV support
+wsgidav==4.2.0
+cheroot==9.0.0
+
+# Terminal emulation
+ptyprocess==0.7.0
+pyte==0.8.1
