@@ -87,6 +87,13 @@ class TermuxDomainController(BaseDomainController):
         (This method is for HTTP basic authentication, which is what we use)
         """
         return self.auth_domain_user(realm, user_name, password, environ)
+        
+    def supports_http_digest_auth(self):
+        """
+        Return True if digest authentication is enabled.
+        We only use basic auth so this should return False.
+        """
+        return False
 
 class WebDAVService:
     """
