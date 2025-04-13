@@ -10,6 +10,7 @@ try:
     # Try newer module structure
     from wsgidav.dav_provider import DAVProvider
     from wsgidav.dav_error import DAVError
+    from wsgidav.dc.simple_dc import SimpleDomainController
 except ImportError:
     # Fall back to older module structure
     logger = logging.getLogger(__name__)
@@ -17,6 +18,7 @@ except ImportError:
     # In older versions, these may be directly in wsgidav module
     from wsgidav import DAVProvider
     from wsgidav import DAVError
+    from wsgidav.domaincontroller import BaseDomainController as SimpleDomainController
 
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
@@ -24,6 +26,39 @@ from flask import Flask, request, Response
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+# Create a custom domain controller that inherits from the proper WsgiDAV base class
+class TermuxDomainController(SimpleDomainController):
+    """Custom domain controller for WebDAV authentication."""
+    
+    def __init__(self, webdav_service):
+        super().__init__()
+        self.webdav_service = webdav_service
+    
+    def get_domain_realm(self, path_info, environ):
+        """Return realm name for given URL."""
+        return "TermuxWebTerminal"
+    
+    def require_authentication(self, realm, environ):
+        """Return True if authentication is required for this resource."""
+        return True
+    
+    def is_realm_user(self, realm, user_name, environ):
+        """Check if user has access to realm."""
+        return user_name in self.webdav_service.credentials
+    
+    def get_realm_user_password(self, realm, user_name, environ):
+        """Return the stored password for the user name (plaintext)."""
+        # We don't store or return plaintext passwords
+        return None
+    
+    def auth_domain_user(self, realm, user_name, password, environ):
+        """Return True if user has access to realm with given password."""
+        if user_name not in self.webdav_service.credentials:
+            return False
+        
+        # Check password using werkzeug's secure password checking
+        return check_password_hash(self.webdav_service.credentials[user_name]["password_hash"], password)
 
 class WebDAVService:
     """
@@ -76,6 +111,9 @@ class WebDAVService:
     
     def _create_webdav_app(self):
         """Create the WebDAV WSGI application."""
+        # Create a proper domain controller instance
+        domain_controller = TermuxDomainController(self)
+        
         # Configure the WebDAV application
         config = {
             "provider_mapping": {
@@ -83,13 +121,13 @@ class WebDAVService:
                 "/": self._create_root_provider(),
             },
             "http_authenticator": {
-                "domain_controller": self,  # This class implements domain_controller methods
+                "domain_controller": domain_controller,  # Use the proper domain controller class
                 "accept_basic": True,
                 "accept_digest": False,
                 "default_to_digest": False,
             },
             "simple_dc": {
-                "user_mapping": {},  # We'll handle auth in get_domain_controller
+                "user_mapping": {},  # We'll handle auth in domain_controller
             },
             "verbose": 2,
             "logging": {
@@ -243,32 +281,7 @@ class WebDAVService:
         # Return an instance of the SessionAwareProvider
         return SessionAwareProvider()
     
-    # Domain controller methods for authentication
-    
-    def get_domain_realm(self, path_info, environ):
-        """Return realm name for given URL."""
-        return "TermuxWebTerminal"
-    
-    def require_authentication(self, realm, environ):
-        """Return True if authentication is required for this resource."""
-        return True
-    
-    def is_realm_user(self, realm, user_name, environ):
-        """Check if user has access to realm."""
-        return user_name in self.credentials
-    
-    def get_realm_user_password(self, realm, user_name, environ):
-        """Return the stored password for the user name (plaintext)."""
-        # We don't store or return plaintext passwords
-        return None
-    
-    def auth_domain_user(self, realm, user_name, password, environ):
-        """Return True if user has access to realm with given password."""
-        if user_name not in self.credentials:
-            return False
-        
-        # Check password using werkzeug's secure password checking
-        return check_password_hash(self.credentials[user_name]["password_hash"], password)
+    # We've moved domain controller methods to the TermuxDomainController class
     
     # Session credential management
     
