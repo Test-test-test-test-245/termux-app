@@ -10,6 +10,7 @@ try:
     # Try newer module structure
     from wsgidav.dav_provider import DAVProvider
     from wsgidav.dav_error import DAVError
+    from wsgidav.dc.base_dc import BaseDomainController
 except ImportError:
     # Fall back to older module structure
     logger = logging.getLogger(__name__)
@@ -17,6 +18,11 @@ except ImportError:
     # In older versions, these may be directly in wsgidav module
     from wsgidav import DAVProvider
     from wsgidav import DAVError
+    try:
+        from wsgidav.domaincontroller import BaseDomainController
+    except ImportError:
+        # For very old versions
+        from wsgidav.domaincontroller import AbstractDomainController as BaseDomainController
 
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
@@ -25,13 +31,22 @@ from flask import Flask, request, Response
 # Configure logging
 logger = logging.getLogger(__name__)
 
-# Create a completely custom domain controller without inheritance
-# This avoids the circular dependency with wsgidav_app
-class TermuxDomainController:
+# Global variable to hold reference to the WebDAVService instance
+# This is needed to access credentials from the domain controller
+_webdav_service_instance = None
+
+# Create a proper domain controller class that inherits from BaseDomainController
+# and accepts wsgidav_app and config as required by the library
+class TermuxDomainController(BaseDomainController):
     """Custom domain controller for WebDAV authentication."""
     
-    def __init__(self, webdav_service):
-        self.webdav_service = webdav_service
+    def __init__(self, wsgidav_app, config):
+        super().__init__()
+        # We can't pass the webdav_service directly due to circular deps,
+        # so we access it through the global variable
+        global _webdav_service_instance
+        self.webdav_service = _webdav_service_instance
+        logger.info("TermuxDomainController initialized")
     
     def get_domain_realm(self, path_info, environ):
         """Return realm name for given URL."""
@@ -43,6 +58,9 @@ class TermuxDomainController:
     
     def is_realm_user(self, realm, user_name, environ):
         """Check if user has access to realm."""
+        if not self.webdav_service or not hasattr(self.webdav_service, 'credentials'):
+            logger.error("WebDAV service not available in domain controller")
+            return False
         return user_name in self.webdav_service.credentials
     
     def get_realm_user_password(self, realm, user_name, environ):
@@ -52,6 +70,10 @@ class TermuxDomainController:
     
     def auth_domain_user(self, realm, user_name, password, environ):
         """Return True if user has access to realm with given password."""
+        if not self.webdav_service or not hasattr(self.webdav_service, 'credentials'):
+            logger.error("WebDAV service not available in domain controller")
+            return False
+            
         if user_name not in self.webdav_service.credentials:
             return False
         
@@ -117,8 +139,9 @@ class WebDAVService:
     
     def _create_webdav_app(self):
         """Create the WebDAV WSGI application."""
-        # Create a proper domain controller instance
-        domain_controller = TermuxDomainController(self)
+        # Set the global reference so the domain controller can access it
+        global _webdav_service_instance
+        _webdav_service_instance = self
         
         # Configure the WebDAV application
         config = {
@@ -127,7 +150,7 @@ class WebDAVService:
                 "/": self._create_root_provider(),
             },
             "http_authenticator": {
-                "domain_controller": domain_controller,  # Use the proper domain controller class
+                "domain_controller": TermuxDomainController,  # Pass the CLASS, not an instance
                 "accept_basic": True,
                 "accept_digest": False,
                 "default_to_digest": False,
@@ -143,6 +166,7 @@ class WebDAVService:
             "lock_storage": True,  # Updated from deprecated lock_manager
         }
         
+        logger.info("Creating WebDAV app with TermuxDomainController class")
         return WsgiDAVApp(config)
     
     def get_wsgi_app(self):
