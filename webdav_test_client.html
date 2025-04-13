@@ -93,6 +93,12 @@
             border-radius: 5px;
             margin-top: 10px;
         }
+        .session-details {
+            background-color: #e8f5e9;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
         .hidden {
             display: none;
         }
@@ -102,6 +108,15 @@
         .error {
             color: #e53935;
         }
+        .flex-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }
+        .flex-grow {
+            flex-grow: 1;
+        }
     </style>
 </head>
 <body>
@@ -109,10 +124,17 @@
     <p>This tool allows you to test WebDAV functionality and execute commands to verify WebDAV access.</p>
     
     <div class="panel">
-        <h2>1. Connect to Terminal Session</h2>
-        <div>
-            <label for="session-id">Session ID:</label>
-            <input type="text" id="session-id" placeholder="Enter terminal session ID">
+        <h2>1. Create or Connect to Terminal Session</h2>
+        
+        <div id="create-session-panel">
+            <h3>Create New Session</h3>
+            <button id="create-session-btn">Create New Terminal Session</button>
+            <div id="create-session-status" class="hidden session-details"></div>
+        </div>
+        
+        <h3>Or Connect to Existing Session</h3>
+        <div class="flex-container">
+            <input type="text" id="session-id" placeholder="Enter terminal session ID" class="flex-grow">
             <button id="connect-btn">Connect</button>
         </div>
         <div id="connection-status"></div>
@@ -155,6 +177,8 @@
             const sessionIdInput = document.getElementById('session-id');
             const connectBtn = document.getElementById('connect-btn');
             const connectionStatus = document.getElementById('connection-status');
+            const createSessionBtn = document.getElementById('create-session-btn');
+            const createSessionStatus = document.getElementById('create-session-status');
             const webdavPanel = document.getElementById('webdav-panel');
             const getCredentialsBtn = document.getElementById('get-credentials-btn');
             const credentialsContainer = document.getElementById('credentials-container');
@@ -177,6 +201,61 @@
             let commandId = null;
             let currentPath = '';
             
+            // Create new terminal session
+            createSessionBtn.addEventListener('click', function() {
+                createSessionBtn.disabled = true;
+                
+                // Get the current host
+                const host = window.location.host;
+                const scheme = window.location.protocol === 'https:' ? 'https' : 'http';
+                const apiUrl = `${scheme}://${host}/api/terminal/sessions`;
+                
+                // Create session data
+                const sessionData = {
+                    shell: '/bin/bash',
+                    cols: 80,
+                    rows: 24
+                };
+                
+                // Show loading status
+                createSessionStatus.classList.remove('hidden');
+                createSessionStatus.innerHTML = '<p>Creating new terminal session...</p>';
+                
+                // Call API to create session
+                fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(sessionData)
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    // Display session info
+                    createSessionStatus.innerHTML = `
+                        <p class="success">Session created successfully!</p>
+                        <p><strong>Session ID:</strong> ${data.id}</p>
+                        <p><strong>Shell:</strong> ${data.shell}</p>
+                        <p><strong>Created:</strong> ${new Date(data.created_at * 1000).toLocaleString()}</p>
+                    `;
+                    
+                    // Set the session ID input field
+                    sessionIdInput.value = data.id;
+                    
+                    // Re-enable create button
+                    createSessionBtn.disabled = false;
+                })
+                .catch(error => {
+                    createSessionStatus.innerHTML = `<p class="error">Error creating session: ${error.message}</p>`;
+                    createSessionBtn.disabled = false;
+                });
+            });
+            
             // Connect to WebSocket
             connectBtn.addEventListener('click', function() {
                 sessionId = sessionIdInput.value.trim();
@@ -189,162 +268,183 @@
                 const host = window.location.host;
                 const scheme = window.location.protocol === 'https:' ? 'https' : 'http';
                 
-                // Initialize Socket.IO
-                socket = io();
+                // First verify that session exists
+                const sessionUrl = `${scheme}://${host}/api/terminal/sessions/${sessionId}`;
                 
-                // Connect to WebDAV socket
-                socket.on('connect', function() {
-                    socket.emit('webdav_connect');
-                });
-                
-                // Handle WebDAV connections
-                socket.on('webdav_connected', function(data) {
-                    connectionStatus.innerHTML = '<span class="success">Connected successfully!</span>';
-                    webdavPanel.classList.remove('hidden');
-                    testPanel.classList.remove('hidden');
-                    commandPanel.classList.remove('hidden');
-                });
-                
-                // Handle WebDAV credentials
-                socket.on('webdav_credentials', function(data) {
-                    const credentials = data.credentials;
-                    credentialsContainer.classList.remove('hidden');
-                    credentialsContainer.innerHTML = `
-                        <h3>WebDAV Access Information</h3>
-                        <p><strong>URL:</strong> ${credentials.url}</p>
-                        <p><strong>Username:</strong> ${credentials.username}</p>
-                        <p><strong>Password:</strong> ${credentials.password}</p>
-                        <p><strong>Protocol:</strong> ${credentials.protocol}</p>
-                    `;
-                });
-                
-                // Handle WebDAV test results
-                socket.on('webdav_test_result', function(data) {
-                    if (data.status === 'success') {
-                        testResult.innerHTML = `
-                            <p class="success">${data.message}</p>
-                            <p>Files directory: ${data.user_files_path}</p>
-                            <p>Files count: ${data.files_count}</p>
+                fetch(sessionUrl)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`Session not found (${response.status})`);
+                        }
+                        return response.json();
+                    })
+                    .then(sessionData => {
+                        // If session exists, proceed with WebSocket connection
+                        connectionStatus.innerHTML = `
+                            <p class="success">Session exists! Connecting...</p>
+                            <p><strong>Shell:</strong> ${sessionData.shell}</p>
                         `;
-                        filePathInput.classList.remove('hidden');
-                    } else {
-                        testResult.innerHTML = `<p class="error">${data.message}</p>`;
-                    }
-                });
-                
-                // Handle WebDAV file listings
-                socket.on('webdav_files_list', function(data) {
-                    fileListContainer.classList.remove('hidden');
-                    fileList.innerHTML = '';
-                    currentPath = data.path;
-                    
-                    // Add parent directory if not at root
-                    if (currentPath) {
-                        const parentPath = currentPath.substring(0, currentPath.lastIndexOf('/'));
-                        const li = document.createElement('li');
-                        li.className = 'folder';
-                        li.textContent = '../ (Parent Directory)';
-                        li.addEventListener('click', function() {
-                            socket.emit('webdav_list_files', {
-                                session_id: sessionId,
-                                path: parentPath
+                        
+                        // Initialize Socket.IO
+                        socket = io();
+                        
+                        // Connect to WebDAV socket
+                        socket.on('connect', function() {
+                            socket.emit('webdav_connect');
+                        });
+                        
+                        // Handle WebDAV connections
+                        socket.on('webdav_connected', function(data) {
+                            connectionStatus.innerHTML = '<span class="success">Connected successfully!</span>';
+                            webdavPanel.classList.remove('hidden');
+                            testPanel.classList.remove('hidden');
+                            commandPanel.classList.remove('hidden');
+                        });
+                        
+                        // Handle WebDAV credentials
+                        socket.on('webdav_credentials', function(data) {
+                            const credentials = data.credentials;
+                            credentialsContainer.classList.remove('hidden');
+                            credentialsContainer.innerHTML = `
+                                <h3>WebDAV Access Information</h3>
+                                <p><strong>URL:</strong> ${credentials.url}</p>
+                                <p><strong>Username:</strong> ${credentials.username}</p>
+                                <p><strong>Password:</strong> ${credentials.password}</p>
+                                <p><strong>Protocol:</strong> ${credentials.protocol}</p>
+                            `;
+                        });
+                        
+                        // Handle WebDAV test results
+                        socket.on('webdav_test_result', function(data) {
+                            if (data.status === 'success') {
+                                testResult.innerHTML = `
+                                    <p class="success">${data.message}</p>
+                                    <p>Files directory: ${data.user_files_path}</p>
+                                    <p>Files count: ${data.files_count}</p>
+                                `;
+                                filePathInput.classList.remove('hidden');
+                            } else {
+                                testResult.innerHTML = `<p class="error">${data.message}</p>`;
+                            }
+                        });
+                        
+                        // Handle WebDAV file listings
+                        socket.on('webdav_files_list', function(data) {
+                            fileListContainer.classList.remove('hidden');
+                            fileList.innerHTML = '';
+                            currentPath = data.path;
+                            
+                            // Add parent directory if not at root
+                            if (currentPath) {
+                                const parentPath = currentPath.substring(0, currentPath.lastIndexOf('/'));
+                                const li = document.createElement('li');
+                                li.className = 'folder';
+                                li.textContent = '../ (Parent Directory)';
+                                li.addEventListener('click', function() {
+                                    socket.emit('webdav_list_files', {
+                                        session_id: sessionId,
+                                        path: parentPath
+                                    });
+                                });
+                                fileList.appendChild(li);
+                            }
+                            
+                            // Add files and directories
+                            data.files.forEach(function(file) {
+                                const li = document.createElement('li');
+                                if (file.is_dir) {
+                                    li.className = 'folder';
+                                    li.textContent = file.name + '/';
+                                    li.addEventListener('click', function() {
+                                        const newPath = currentPath ? currentPath + '/' + file.name : file.name;
+                                        socket.emit('webdav_list_files', {
+                                            session_id: sessionId,
+                                            path: newPath
+                                        });
+                                    });
+                                } else {
+                                    li.className = 'file';
+                                    li.textContent = `${file.name} (${formatSize(file.size)})`;
+                                }
+                                fileList.appendChild(li);
                             });
                         });
-                        fileList.appendChild(li);
-                    }
-                    
-                    // Add files and directories
-                    data.files.forEach(function(file) {
-                        const li = document.createElement('li');
-                        if (file.is_dir) {
-                            li.className = 'folder';
-                            li.textContent = file.name + '/';
-                            li.addEventListener('click', function() {
-                                const newPath = currentPath ? currentPath + '/' + file.name : file.name;
-                                socket.emit('webdav_list_files', {
-                                    session_id: sessionId,
-                                    path: newPath
-                                });
+                        
+                        // Handle WebDAV file creation
+                        socket.on('webdav_file_created', function(data) {
+                            testResult.innerHTML = `
+                                <p class="success">File created successfully!</p>
+                                <p>Filename: ${data.filename}</p>
+                                <p>Path: ${data.path}</p>
+                                <p>Size: ${formatSize(data.size)}</p>
+                            `;
+                            // Refresh file list
+                            socket.emit('webdav_list_files', {
+                                session_id: sessionId,
+                                path: currentPath
                             });
-                        } else {
-                            li.className = 'file';
-                            li.textContent = `${file.name} (${formatSize(file.size)})`;
-                        }
-                        fileList.appendChild(li);
+                        });
+                        
+                        // Handle command output
+                        socket.on('command_started', function(data) {
+                            commandId = data.command_id;
+                            terminalOutput.innerHTML = `<div class="command">$ ${data.command}</div>`;
+                            executeBtn.disabled = true;
+                        });
+                        
+                        socket.on('command_output', function(data) {
+                            if (data.command_id === commandId) {
+                                const output = document.createElement('div');
+                                output.textContent = data.output;
+                                terminalOutput.appendChild(output);
+                                // Auto-scroll to bottom
+                                terminalOutput.scrollTop = terminalOutput.scrollHeight;
+                            }
+                        });
+                        
+                        socket.on('command_completed', function(data) {
+                            if (data.command_id === commandId) {
+                                const output = document.createElement('div');
+                                output.textContent = `Command completed with exit code: ${data.exit_code}`;
+                                if (data.exit_code === 0) {
+                                    output.className = 'success';
+                                } else {
+                                    output.className = 'error';
+                                }
+                                terminalOutput.appendChild(output);
+                                // Auto-scroll to bottom
+                                terminalOutput.scrollTop = terminalOutput.scrollHeight;
+                                executeBtn.disabled = false;
+                            }
+                        });
+                        
+                        socket.on('command_error', function(data) {
+                            if (data.command_id === commandId) {
+                                const output = document.createElement('div');
+                                output.textContent = `Error: ${data.error}`;
+                                output.className = 'error';
+                                terminalOutput.appendChild(output);
+                                executeBtn.disabled = false;
+                            }
+                        });
+                        
+                        // Handle errors
+                        socket.on('webdav_error', function(data) {
+                            const errorMessage = data.message || 'Unknown error';
+                            testResult.innerHTML = `<p class="error">Error: ${errorMessage}</p>`;
+                        });
+                        
+                        socket.on('error', function(error) {
+                            connectionStatus.innerHTML = `<span class="error">Error: ${error}</span>`;
+                        });
+                        
+                        socket.on('disconnect', function() {
+                            connectionStatus.innerHTML = '<span class="error">Disconnected from server</span>';
+                        });
+                    })
+                    .catch(error => {
+                        connectionStatus.innerHTML = `<span class="error">${error.message}</span>`;
                     });
-                });
-                
-                // Handle WebDAV file creation
-                socket.on('webdav_file_created', function(data) {
-                    testResult.innerHTML = `
-                        <p class="success">File created successfully!</p>
-                        <p>Filename: ${data.filename}</p>
-                        <p>Path: ${data.path}</p>
-                        <p>Size: ${formatSize(data.size)}</p>
-                    `;
-                    // Refresh file list
-                    socket.emit('webdav_list_files', {
-                        session_id: sessionId,
-                        path: currentPath
-                    });
-                });
-                
-                // Handle command output
-                socket.on('command_started', function(data) {
-                    commandId = data.command_id;
-                    terminalOutput.innerHTML = `<div class="command">$ ${data.command}</div>`;
-                    executeBtn.disabled = true;
-                });
-                
-                socket.on('command_output', function(data) {
-                    if (data.command_id === commandId) {
-                        const output = document.createElement('div');
-                        output.textContent = data.output;
-                        terminalOutput.appendChild(output);
-                        // Auto-scroll to bottom
-                        terminalOutput.scrollTop = terminalOutput.scrollHeight;
-                    }
-                });
-                
-                socket.on('command_completed', function(data) {
-                    if (data.command_id === commandId) {
-                        const output = document.createElement('div');
-                        output.textContent = `Command completed with exit code: ${data.exit_code}`;
-                        if (data.exit_code === 0) {
-                            output.className = 'success';
-                        } else {
-                            output.className = 'error';
-                        }
-                        terminalOutput.appendChild(output);
-                        // Auto-scroll to bottom
-                        terminalOutput.scrollTop = terminalOutput.scrollHeight;
-                        executeBtn.disabled = false;
-                    }
-                });
-                
-                socket.on('command_error', function(data) {
-                    if (data.command_id === commandId) {
-                        const output = document.createElement('div');
-                        output.textContent = `Error: ${data.error}`;
-                        output.className = 'error';
-                        terminalOutput.appendChild(output);
-                        executeBtn.disabled = false;
-                    }
-                });
-                
-                // Handle errors
-                socket.on('webdav_error', function(data) {
-                    const errorMessage = data.message || 'Unknown error';
-                    testResult.innerHTML = `<p class="error">Error: ${errorMessage}</p>`;
-                });
-                
-                socket.on('error', function(error) {
-                    connectionStatus.innerHTML = `<span class="error">Error: ${error}</span>`;
-                });
-                
-                socket.on('disconnect', function() {
-                    connectionStatus.innerHTML = '<span class="error">Disconnected from server</span>';
-                });
             });
             
             // Get WebDAV credentials
