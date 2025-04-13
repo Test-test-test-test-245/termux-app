@@ -53,7 +53,9 @@ app.register_blueprint(webdav_api)
 
 # Import and register WebSocket handlers
 from app.api.terminal_ws import register_socket_events
+from app.api.webdav_ws import register_webdav_socket_events
 register_socket_events(socketio)
+register_webdav_socket_events(socketio)
 
 # Re-enabled WebDAV mounting with fixed implementation
 from app.api.webdav_api import get_webdav_service
